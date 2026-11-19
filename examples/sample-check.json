@@ -1,0 +1,107 @@
+{
+  "tool": "dns-propagation",
+  "version": "0.1.0",
+  "propagated": false,
+  "checks": [
+    {
+      "name": "example.com",
+      "type": "A",
+      "expected": {
+        "values": [
+          "203.0.113.10"
+        ],
+        "absent": false,
+        "mode": "exact",
+        "source": "cli"
+      },
+      "threshold": 100.0,
+      "resolvers": [
+        {
+          "id": "cloudflare",
+          "name": "Cloudflare",
+          "provider": "Cloudflare",
+          "region": "global",
+          "country": "",
+          "transport": "udp",
+          "endpoint": "1.1.1.1",
+          "status": "ok",
+          "rcode": "NOERROR",
+          "answers": [
+            "203.0.113.10"
+          ],
+          "ttl": 300,
+          "elapsed_ms": 18.4,
+          "error": "",
+          "matches": true
+        },
+        {
+          "id": "google",
+          "name": "Google",
+          "provider": "Google",
+          "region": "global",
+          "country": "",
+          "transport": "udp",
+          "endpoint": "8.8.8.8",
+          "status": "ok",
+          "rcode": "NOERROR",
+          "answers": [
+            "198.51.100.7"
+          ],
+          "ttl": 1740,
+          "elapsed_ms": 18.4,
+          "error": "",
+          "matches": false
+        },
+        {
+          "id": "quad9",
+          "name": "Quad9",
+          "provider": "Quad9",
+          "region": "global",
+          "country": "CH",
+          "transport": "udp",
+          "endpoint": "9.9.9.9",
+          "status": "ok",
+          "rcode": "NOERROR",
+          "answers": [
+            "203.0.113.10"
+          ],
+          "ttl": 300,
+          "elapsed_ms": 18.4,
+          "error": "",
+          "matches": true
+        },
+        {
+          "id": "adguard",
+          "name": "AdGuard",
+          "provider": "AdGuard",
+          "region": "global",
+          "country": "CY",
+          "transport": "udp",
+          "endpoint": "94.140.14.14",
+          "status": "timeout",
+          "rcode": "",
+          "answers": [],
+          "ttl": null,
+          "elapsed_ms": 3001.2,
+          "error": "no answer within 3s",
+          "matches": false
+        }
+      ],
+      "summary": {
+        "total": 4,
+        "responded": 3,
+        "matching": 2,
+        "propagation_pct": 50.0,
+        "consistency_pct": 66.7,
+        "majority": {
+          "status": "ok",
+          "answers": [
+            "203.0.113.10"
+          ]
+        },
+        "propagated": false
+      },
+      "notes": []
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+name: Bug report
+description: A wrong answer, a crash, a misleading table or a wrong exit code
+labels: ["bug"]
+body:
+  - type: textarea
+    id: command
+    attributes:
+      label: Command you ran
+      description: The full command line. Replace private domain names with example.com if you need to.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: The table or the `--json` output, and the exit code (`echo $?`).
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+      description: For wrong answers, the output of `dig @RESOLVER NAME TYPE` helps a lot.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "Output of: dns-propagation --version (or the image tag)"
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "pipx on macOS 15 / Docker on Ubuntu 24.04 / GitHub Actions"

@@ -1,0 +1,29 @@
+# Wait until a DNS change made by an earlier step is visible on public resolvers,
+# then continue the deployment. Copy into .github/workflows/ and adjust.
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # ... update the record with your DNS provider's API here ...
+
+      - name: Wait for the new A record (up to 30 minutes)
+        run: |
+          docker run --rm ghcr.io/saizul/dns-propagation:latest \
+            watch app.example.com A --expect 203.0.113.10 \
+            --threshold 90 --interval 30 --max-wait 1800 --no-filtering
+
+      - name: Make sure the TXT verification record is live everywhere
+        run: |
+          pipx run --spec git+https://github.com/saizul/dns-propagation dns-propagation \
+            check _acme-challenge.example.com TXT --authoritative --json > dns-report.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dns-report
+          path: dns-report.json

@@ -1,0 +1,9 @@
+# Custom resolver list for --resolvers-file.
+# Format: id  address-or-DoH-URL  [region]  [display name]
+# Lines starting with # are comments.
+
+office      10.0.0.53                     lan   Office resolver
+isp-primary 203.0.113.53                  isp   ISP resolver
+cloudflare  1.1.1.1                       global Cloudflare
+google      8.8.8.8                       global Google
+quad9-doh   https://dns.quad9.net/dns-query global Quad9 over HTTPS

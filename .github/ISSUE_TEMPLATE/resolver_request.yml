@@ -1,0 +1,35 @@
+name: Add or fix a resolver
+description: Suggest a public resolver for the built-in list, or report one that is down or moved
+labels: ["resolver", "good first issue"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Built-in resolvers must be free, public, documented by their operator and reachable without an account.
+        See "Add a resolver" in CONTRIBUTING.md.
+  - type: input
+    id: name
+    attributes:
+      label: Resolver and operator
+      placeholder: "Example DNS, operated by Example Networks"
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: Link to the operator's documentation
+    validations:
+      required: true
+  - type: textarea
+    id: addresses
+    attributes:
+      label: Addresses
+      description: IPv4/IPv6 addresses, DoH URL, country and whether it filters (malware, ads, adult content).
+    validations:
+      required: true
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Contribution
+      options:
+        - label: I would like to open the pull request
