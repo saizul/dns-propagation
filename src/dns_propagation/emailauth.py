@@ -1,4 +1,4 @@
-"""SPF, DMARC and DKIM record presence and syntax checks."""
+"""SPF, DMARC, DKIM, MTA-STS and TLS-RPT record presence and syntax checks."""
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ Lookup = Callable[[str, str], QueryResult]
 """``lookup(name, rdtype)`` returns a :class:`QueryResult`."""
 
 LEVELS = ("ok", "info", "warning", "error")
+
+EMAIL_CHECKS = ("mx", "spf", "dmarc", "dkim", "mta-sts", "tls-rpt")
+"""Every check ``check_domain`` knows, in report order."""
 
 COMMON_DKIM_SELECTORS = (
     "default",
@@ -539,6 +542,122 @@ def check_dkim(lookup: Lookup, domain: str, selectors: Iterable[str], report: Em
 # --------------------------------------------------------------------------- MX
 
 
+# --------------------------------------------------------------------------- MTA-STS and TLS-RPT
+
+_STS_ID_RE = re.compile(r"^[A-Za-z0-9]{1,32}$")
+
+
+def _tag_record(texts: list[str], version: str) -> list[str]:
+    """TXT strings that start with ``v=<version>`` (case-insensitive, spaces ignored)."""
+    prefix = f"v={version}".lower()
+    return [t for t in texts if t.replace(" ", "").lower().startswith(prefix)]
+
+
+def validate_mta_sts(text: str) -> tuple[dict[str, str], list[str], list[str]]:
+    """Validate an MTA-STS TXT record (RFC 8461 section 3.1). Returns ``(tags, errors, warnings)``."""
+    errors: list[str] = []
+    pairs, problems = parse_tags(text)
+    errors.extend(problems)
+    tags: dict[str, str] = {}
+    for name, value in pairs:
+        if name in tags:
+            errors.append(f"tag '{name}' appears more than once")
+        tags.setdefault(name, value)
+    if not pairs or pairs[0] != ("v", "STSv1"):
+        errors.append("record must start with 'v=STSv1'")
+    if "id" not in tags:
+        errors.append("required tag 'id' is missing; change it whenever the policy file changes")
+    elif not _STS_ID_RE.match(tags["id"]):
+        errors.append(f"id={tags['id']!r} must be 1 to 32 letters and digits")
+    return tags, errors, []
+
+
+def validate_tls_rpt(text: str) -> tuple[dict[str, str], list[str], list[str]]:
+    """Validate an SMTP TLS reporting record (RFC 8460 section 3). Returns ``(tags, errors, warnings)``."""
+    errors: list[str] = []
+    pairs, problems = parse_tags(text)
+    errors.extend(problems)
+    tags: dict[str, str] = {}
+    for name, value in pairs:
+        if name in tags:
+            errors.append(f"tag '{name}' appears more than once")
+        tags.setdefault(name, value)
+    if not pairs or pairs[0] != ("v", "TLSRPTv1"):
+        errors.append("record must start with 'v=TLSRPTv1'")
+    if "rua" not in tags:
+        errors.append("required tag 'rua' (where reports are sent) is missing")
+    else:
+        for uri in (u.strip() for u in tags["rua"].split(",")):
+            lower = uri.lower()
+            if lower.startswith("mailto:"):
+                if "@" not in uri:
+                    errors.append(f"rua entry {uri!r} is not a mailto: address")
+            elif not lower.startswith("https://") or len(uri) <= len("https://"):
+                errors.append(f"rua entry {uri!r} must be a mailto: or https: URI")
+    return tags, errors, []
+
+
+def _check_policy_record(
+    lookup: Lookup,
+    report: EmailReport,
+    check: str,
+    name: str,
+    version: str,
+    validate: Callable[[str], tuple[dict[str, str], list[str], list[str]]],
+    missing: str,
+    ok: Callable[[dict[str, str]], str],
+) -> bool:
+    texts = _txt(lookup, name, report)
+    if texts is None:
+        report.add(check, "error", f"TXT lookup for {name} failed")
+        return False
+    records = _tag_record(texts, version)
+    report.records[check] = records
+    if not records:
+        report.add(check, "info", missing)
+        return False
+    if len(records) > 1:
+        report.add(check, "error", f"{len(records)} records found at {name}; senders ignore all of them")
+    tags, errors, warnings = validate(records[0])
+    for message in errors:
+        report.add(check, "error", message)
+    for message in warnings:
+        report.add(check, "warning", message)
+    if not errors and len(records) == 1:
+        report.add(check, "ok", ok(tags))
+    return True
+
+
+def check_mta_sts(lookup: Lookup, domain: str, report: EmailReport) -> bool:
+    """Check the ``_mta-sts`` TXT record. The HTTPS policy file itself is not fetched."""
+    return _check_policy_record(
+        lookup,
+        report,
+        "mta-sts",
+        f"_mta-sts.{domain}",
+        "STSv1",
+        validate_mta_sts,
+        f"no MTA-STS record at _mta-sts.{domain}: senders may deliver over unencrypted or unverified TLS",
+        lambda tags: (
+            f"MTA-STS record present (id={tags['id']}); serve the policy at "
+            f"https://mta-sts.{domain}/.well-known/mta-sts.txt"
+        ),
+    )
+
+
+def check_tls_rpt(lookup: Lookup, domain: str, report: EmailReport) -> bool:
+    return _check_policy_record(
+        lookup,
+        report,
+        "tls-rpt",
+        f"_smtp._tls.{domain}",
+        "TLSRPTv1",
+        validate_tls_rpt,
+        f"no TLS-RPT record at _smtp._tls.{domain}: you will not hear about TLS delivery failures",
+        lambda tags: f"TLS reports go to {tags['rua']}",
+    )
+
+
 def check_mx(lookup: Lookup, domain: str, report: EmailReport) -> None:
     report.lookups += 1
     result = lookup(domain, "MX")
@@ -562,10 +681,10 @@ def check_domain(
     domain: str,
     selectors: Iterable[str] = (),
     *,
-    checks: Iterable[str] = ("mx", "spf", "dmarc", "dkim"),
+    checks: Iterable[str] = EMAIL_CHECKS,
     recursive_spf: bool = True,
 ) -> EmailReport:
-    """Run the email authentication checks for ``domain``."""
+    """Run the email authentication checks for ``domain`` (any of :data:`EMAIL_CHECKS`)."""
     domain = domain.strip().rstrip(".").lower()
     report = EmailReport(domain)
     wanted = set(checks)
@@ -577,4 +696,8 @@ def check_domain(
         check_dmarc(lookup, domain, report)
     if "dkim" in wanted:
         check_dkim(lookup, domain, selectors, report)
+    has_sts = check_mta_sts(lookup, domain, report) if "mta-sts" in wanted else False
+    has_rpt = check_tls_rpt(lookup, domain, report) if "tls-rpt" in wanted else False
+    if has_sts and "tls-rpt" in wanted and not has_rpt:
+        report.add("mta-sts", "warning", "MTA-STS without TLS-RPT: add a TLS-RPT record to learn about failures")
     return report

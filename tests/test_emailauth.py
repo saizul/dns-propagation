@@ -287,4 +287,88 @@ def test_full_report_passes():
     data = report.to_dict()
     assert data["domain"] == "example.com"
     assert data["summary"] == {"errors": 0, "warnings": 0, "passed": True}
-    assert {f["check"] for f in data["findings"]} == {"mx", "spf", "dmarc", "dkim"}
+    assert {f["check"] for f in data["findings"]} == {"mx", "spf", "dmarc", "dkim", "mta-sts", "tls-rpt"}
+
+
+# --------------------------------------------------------------------------- MTA-STS and TLS-RPT
+
+GOOD_STS = {
+    ("_mta-sts.example.com", "TXT"): ok("v=STSv1; id=20261121T0900"),
+    ("_smtp._tls.example.com", "TXT"): ok("v=TLSRPTv1; rua=mailto:tls@example.com,https://reports.example.com/tls"),
+}
+
+
+def test_mta_sts_and_tls_rpt_pass():
+    report = check_domain(lookup_from(GOOD_STS), "example.com", checks=["mta-sts", "tls-rpt"])
+    assert report.errors == 0 and report.warnings == 0
+    assert findings(report, "mta-sts", "ok") == [
+        "MTA-STS record present (id=20261121T0900); serve the policy at "
+        "https://mta-sts.example.com/.well-known/mta-sts.txt"
+    ]
+    assert findings(report, "tls-rpt", "ok") == [
+        "TLS reports go to mailto:tls@example.com,https://reports.example.com/tls"
+    ]
+    assert report.records["mta-sts"] == ["v=STSv1; id=20261121T0900"]
+
+
+def test_missing_mta_sts_and_tls_rpt_are_only_info():
+    report = check_domain(lookup_from({}), "example.com", checks=["mta-sts", "tls-rpt"])
+    assert report.errors == 0 and report.warnings == 0
+    assert "no MTA-STS record at _mta-sts.example.com" in findings(report, "mta-sts", "info")[0]
+    assert "no TLS-RPT record at _smtp._tls.example.com" in findings(report, "tls-rpt", "info")[0]
+
+
+def test_mta_sts_without_tls_rpt_warns():
+    table = {("_mta-sts.example.com", "TXT"): ok("v=STSv1; id=abc123")}
+    report = check_domain(lookup_from(table), "example.com", checks=["mta-sts", "tls-rpt"])
+    assert findings(report, "mta-sts", "warning") == [
+        "MTA-STS without TLS-RPT: add a TLS-RPT record to learn about failures"
+    ]
+    # Only checking MTA-STS does not complain about TLS-RPT.
+    assert check_domain(lookup_from(table), "example.com", checks=["mta-sts"]).warnings == 0
+
+
+@pytest.mark.parametrize(
+    ("records", "message"),
+    [
+        (("v=STSv1;",), "required tag 'id' is missing"),
+        (("v=STSv1; id=has-dash",), "must be 1 to 32 letters and digits"),
+        (("v=STSv1; id=" + "a" * 33,), "must be 1 to 32 letters and digits"),
+        (("v=stsv1; id=abc",), "must start with 'v=STSv1'"),
+        (("v=STSv1; id=a", "v=STSv1; id=b"), "2 records found at _mta-sts.example.com"),
+        (("v=STSv1; id=a; id=b",), "tag 'id' appears more than once"),
+    ],
+)
+def test_mta_sts_errors(records, message):
+    report = check_domain(
+        lookup_from({("_mta-sts.example.com", "TXT"): ok(*records)}), "example.com", checks=["mta-sts"]
+    )
+    assert any(message in e for e in findings(report, "mta-sts", "error")), report.findings
+    assert not findings(report, "mta-sts", "ok")
+
+
+@pytest.mark.parametrize(
+    ("record", "message"),
+    [
+        ("v=TLSRPTv1", "required tag 'rua'"),
+        ("v=TLSRPTv1; rua=tls@example.com", "must be a mailto: or https: URI"),
+        ("v=TLSRPTv1; rua=mailto:nobody", "is not a mailto: address"),
+        ("v=TLSRPTv1; rua=http://reports.example.com", "must be a mailto: or https: URI"),
+        ("rua=mailto:a@example.com; v=TLSRPTv1", None),
+    ],
+)
+def test_tls_rpt_errors(record, message):
+    table = {("_smtp._tls.example.com", "TXT"): ok(record)}
+    report = check_domain(lookup_from(table), "example.com", checks=["tls-rpt"])
+    if message is None:
+        # A record that does not start with v=TLSRPTv1 is not a TLS-RPT record at all.
+        assert findings(report, "tls-rpt", "info")
+    else:
+        assert any(message in e for e in findings(report, "tls-rpt", "error")), report.findings
+
+
+def test_mta_sts_lookup_failure_is_an_error():
+    table = {("_mta-sts.example.com", "TXT"): TIMEOUT}
+    report = check_domain(lookup_from(table), "example.com", checks=["mta-sts"])
+    assert findings(report, "mta-sts", "error") == ["TXT lookup for _mta-sts.example.com failed"]
+    assert report.lookup_failures == 1

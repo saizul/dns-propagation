@@ -8,7 +8,7 @@ from typing import Any
 
 from ._version import __version__
 from .check import Report, ResolverResult
-from .emailauth import EmailReport
+from .emailauth import EMAIL_CHECKS, EmailReport
 from .resolvers import Resolver
 
 _COLORS = {"green": "32", "red": "31", "yellow": "33", "dim": "2", "bold": "1"}
@@ -160,7 +160,7 @@ _LEVEL_COLORS = {"ok": "green", "info": "dim", "warning": "yellow", "error": "re
 
 def render_email(report: EmailReport, style: Style) -> str:
     lines = [style(f"Email authentication for {report.domain}", "bold"), ""]
-    for check in ("mx", "spf", "dmarc", "dkim"):
+    for check in EMAIL_CHECKS:
         findings = [f for f in report.findings if f.check == check]
         if not findings:
             continue

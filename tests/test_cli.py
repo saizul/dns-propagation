@@ -205,6 +205,17 @@ def test_email_command():
     assert json.loads(out)["summary"]["passed"] is True
 
 
+def test_email_mta_sts_and_tls_rpt(fake):
+    fake.set("1.1.1.1", "_mta-sts.example.com", "TXT", ok("v=STSv1; id=1"))
+    code, out, _ = run(["email", "example.com", "--only", "mta-sts,tls-rpt", "--no-color"], fake)
+    assert code == EXIT_OK
+    assert "MTA-STS\n  v=STSv1; id=1" in out
+    assert "TLS-RPT" in out and "MTA-STS without TLS-RPT" in out
+    code, out, _ = run(["email", "example.com", "--only", "mta-sts", "--json"], fake)
+    doc = json.loads(out)
+    assert doc["records"]["mta-sts"] == ["v=STSv1; id=1"]
+
+
 def test_email_with_custom_doh_resolver():
     fake = FakeQuerier({("*", "_dmarc.example.com", "TXT"): ok("v=DMARC1; p=reject; rua=mailto:d@example.com")})
     code, _, _ = run(["email", "example.com", "--only", "dmarc", "--resolver", "https://doh.example/dns-query"], fake)

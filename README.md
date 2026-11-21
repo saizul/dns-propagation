@@ -12,7 +12,7 @@ dns-propagation asks 20+ public resolvers (Cloudflare, Google, Quad9, OpenDNS, A
 Control D, regional resolvers in Europe and Asia) at the same time, over plain DNS or
 DNS over HTTPS, and shows who already sees the new value. It can compare against an
 expected value or against the zone's own authoritative servers, wait until a change is
-everywhere, and check that SPF, DMARC and DKIM records are present and valid.
+everywhere, and check that SPF, DMARC, DKIM, MTA-STS and TLS-RPT records are present and valid.
 
 ```text
 $ dns-propagation example.com A --expect 203.0.113.10
@@ -66,8 +66,8 @@ about 29 minutes).
 - **Watch mode** that polls until the change is everywhere (or a deadline passes) and
   **exit codes** made for CI
 - **Email checks**: MX, SPF (syntax, `+all`, recursive 10-lookup limit, void lookups, loops),
-  DMARC (every tag, policy, report addresses) and DKIM (selectors, base64, RSA key size, Ed25519,
-  revoked keys), with common selectors probed automatically
+  DMARC (every tag, policy, report addresses), DKIM (selectors, base64, RSA key size, Ed25519,
+  revoked keys), with common selectors probed automatically, and MTA-STS / TLS-RPT records
 - **JSON output** for scripts and dashboards, colours only on a terminal (`NO_COLOR` respected)
 - One dependency ([dnspython](https://www.dnspython.org/)), no API keys, no account, no tracking
 
@@ -97,7 +97,7 @@ Python 3.11 or newer is needed.
 ```text
 dns-propagation [check] NAME [TYPE ...] [options]       query every resolver once (default command)
 dns-propagation watch NAME [TYPE ...] [options]         repeat until propagated
-dns-propagation email DOMAIN [--selector S ...]         MX, SPF, DMARC, DKIM checks
+dns-propagation email DOMAIN [--selector S ...]         MX, SPF, DMARC, DKIM, MTA-STS, TLS-RPT
 dns-propagation resolvers [--region R] [--json]         list the built-in resolvers
 ```
 
@@ -162,6 +162,7 @@ typical "I just moved my site" session in [`examples/after-dns-change.sh`](examp
 dns-propagation email example.com                    # probes common DKIM selectors
 dns-propagation email example.com -s google -s s1    # check specific selectors
 dns-propagation email example.com --only spf,dmarc --json
+dns-propagation email example.com --only mta-sts,tls-rpt
 ```
 
 | Check | What is verified |
@@ -170,6 +171,8 @@ dns-propagation email example.com --only spf,dmarc --json
 | SPF | Exactly one `v=spf1` record; every mechanism and modifier; IPv4/IPv6 ranges; `+all` (error) and `?all`; `ptr` (deprecated); terms after `all`; `redirect` next to `all`; DNS lookups counted through every `include` and `redirect` (limit 10, `--no-recursive-spf` to count only the top level); void lookups (limit 2); include loops; includes without an SPF record |
 | DMARC | Exactly one record at `_dmarc.DOMAIN`; `v=DMARC1` first; `p`, `sp`, `np` values; `pct`, `adkim`, `aspf`, `fo`, `ri`, `rf`; `rua`/`ruf` must be `mailto:`; warnings for `p=none`, `pct<100`, missing `rua`, unknown tags |
 | DKIM | Key at `SELECTOR._domainkey.DOMAIN`; `v=DKIM1` first; `k=rsa` or `ed25519`; valid base64; RSA key size (error under 1024 bits, warning under 2048); Ed25519 key length; revoked keys (`p=`); `h=sha1` only; `t=y` testing mode |
+| MTA-STS | One record at `_mta-sts.DOMAIN`; `v=STSv1` first; `id` of 1 to 32 letters and digits; duplicate tags. A missing record is `info`; a record without TLS-RPT is a warning. The HTTPS policy file is not fetched |
+| TLS-RPT | One record at `_smtp._tls.DOMAIN`; `v=TLSRPTv1` first; `rua` present and every entry a `mailto:` address or an `https:` URL. A missing record is `info` |
 
 Findings are `ok`, `info`, `warning` or `error`. The command exits with 1 when there is at least
 one error. The lookups go to Cloudflare by default; use `--resolver 9.9.9.9`, `--doh` or `--tcp`
@@ -291,7 +294,7 @@ Items marked **good first issue** are small and well scoped; see
 - [ ] **good first issue** `--format csv` and `--format markdown` for reports and tickets
 - [ ] **good first issue** Show the remaining TTL as a human duration ("29m") in the table
 - [ ] **good first issue** DNS over TLS transport (`--dot`) using `dns.query.tls`
-- [ ] **good first issue** BIMI and MTA-STS / TLS-RPT presence checks for `email`
+- [ ] **good first issue** BIMI presence check for `email`
 - [ ] **good first issue** IPv6 addresses for the built-in resolvers (`--ipv6`)
 - [ ] EDNS Client Subnet to ask Google and others "as if" from another region
 - [ ] DNSSEC validation status per resolver (AD flag) and a `--dnssec` check
