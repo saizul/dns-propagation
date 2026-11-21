@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `email` checks MTA-STS (`_mta-sts.DOMAIN`, RFC 8461) and SMTP TLS reporting
+  (`_smtp._tls.DOMAIN`, RFC 8460) records: version tag first, `id` syntax, `rua` URIs,
+  duplicate records and tags. Missing records are reported as `info`, so they never fail the
+  command; MTA-STS without TLS-RPT is a warning. Select them with `--only mta-sts,tls-rpt`.
+- `EMAIL_CHECKS`, `validate_mta_sts()` and `validate_tls_rpt()` in `dns_propagation.emailauth`.
+
+### Changed
+
+- `email` and `check_domain()` run the two new checks by default, so reports contain
+  `mta-sts` and `tls-rpt` findings and records.
+
 ## [0.1.0] - 2026-11-19
 
 ### Added

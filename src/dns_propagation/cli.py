@@ -11,7 +11,7 @@ from typing import TextIO
 
 from ._version import __version__
 from .check import CheckError, Expectation, Report, expectation_from_authoritative, run_check, watch
-from .emailauth import check_domain
+from .emailauth import EMAIL_CHECKS, check_domain
 from .output import (
     Style,
     render_email,
@@ -142,12 +142,14 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch_p.add_argument("--table", action="store_true", help="print the full table every round")
 
-    email = sub.add_parser("email", help="check MX, SPF, DMARC and DKIM records of a domain")
+    email = sub.add_parser("email", help="check MX, SPF, DMARC, DKIM, MTA-STS and TLS-RPT records of a domain")
     email.add_argument("domain")
     email.add_argument(
         "-s", "--selector", action="append", metavar="SELECTOR", help="DKIM selector (repeatable, comma separated)"
     )
-    email.add_argument("--only", action="append", metavar="CHECKS", help="comma separated subset of mx,spf,dmarc,dkim")
+    email.add_argument(
+        "--only", action="append", metavar="CHECKS", help="comma separated subset of " + ",".join(EMAIL_CHECKS)
+    )
     email.add_argument("--no-recursive-spf", action="store_true", help="do not follow include/redirect for the count")
     email.add_argument(
         "--resolver",
@@ -301,8 +303,8 @@ def cmd_email(args: argparse.Namespace, querier: Querier, out: TextIO) -> int:
         raise UsageError(f"{resolver.name} cannot be used with --transport {args.transport}")
     else:
         target = Target(resolver, args.transport)
-    checks = _csv(args.only) or ["mx", "spf", "dmarc", "dkim"]
-    unknown = sorted(set(checks) - {"mx", "spf", "dmarc", "dkim"})
+    checks = _csv(args.only) or list(EMAIL_CHECKS)
+    unknown = sorted(set(checks) - set(EMAIL_CHECKS))
     if unknown:
         raise UsageError(f"unknown check(s): {', '.join(unknown)}")
 

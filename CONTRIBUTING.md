@@ -37,14 +37,11 @@ Each of these is self-contained and touches one or two files plus tests.
 4. **DNS over TLS.** A `dot` transport using `dns.query.tls` on port 853 and a `dot` field for
    resolvers that support it (Cloudflare `one.one.one.one`, Google `dns.google`, Quad9
    `dns.quad9.net`). (`resolvers.py`, `query.py`, tests with a fake querier)
-5. **MTA-STS and TLS-RPT presence.** In `email`, look up `_mta-sts.DOMAIN` (`v=STSv1; id=...`)
-   and `_smtp._tls.DOMAIN` (`v=TLSRPTv1; rua=...`) and validate the tags; do not fetch the
-   HTTPS policy file. (`emailauth.py`, `tests/test_emailauth.py`)
-6. **BIMI record check.** `default._bimi.DOMAIN` with `v=BIMI1; l=https://...svg; a=...`;
+5. **BIMI record check.** `default._bimi.DOMAIN` with `v=BIMI1; l=https://...svg; a=...`;
    warn when DMARC is not `quarantine` or `reject` (BIMI requires it). (`emailauth.py`, tests)
-7. **IPv6 resolver addresses.** Add an `address6` field to the built-in resolvers and an
+6. **IPv6 resolver addresses.** Add an `address6` field to the built-in resolvers and an
    `--ipv6` flag that queries them instead of IPv4. (`resolvers.py`, `cli.py`, tests)
-8. **Stop early in `watch` on SERVFAIL everywhere.** If every resolver answers SERVFAIL for
+7. **Stop early in `watch` on SERVFAIL everywhere.** If every resolver answers SERVFAIL for
    three rounds in a row, print a DNSSEC hint and exit with 1 instead of waiting.
    (`check.py`, `cli.py`, tests)
 
